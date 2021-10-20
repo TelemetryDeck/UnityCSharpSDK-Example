@@ -1,13 +1,18 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace TelemetryClient
 {
-    internal class SignalManager: MonoBehaviour
+    using TelemetrySignalType = String;
+
+    internal class SignalManager : MonoBehaviour
     {
         private const float MINIMUM_WAIT_TIME_BETWEEN_REQUESTS = 10; // seconds
-    
+
         private SignalCache<SignalPostBody> signalCache;
         private readonly TelemetryManagerConfiguration configuration;
         private Coroutine sendCoroutine = null;
@@ -17,7 +22,7 @@ namespace TelemetryClient
             this.configuration = configuration;
 
             // We automatically load any old signals from disk on initialisation
-            signalCache = new SignalCache(showDebugLogs: configuration.showDebugLogs);
+            signalCache = new SignalCache<SignalPostBody>(showDebugLogs: configuration.showDebugLogs);
 
             StartTimer();
         }
@@ -44,7 +49,7 @@ namespace TelemetryClient
         }
 
         /// Adds a signal to the process queue
-        private void processSignal(TelemetryManagerConfiguration configuration, TelemetrySignalType signalType, string clientUser = null, Dictionary<string, string> additionalPayload = null)
+        internal void ProcessSignal(TelemetryManagerConfiguration configuration, TelemetrySignalType signalType, string clientUser = null, Dictionary<string, string> additionalPayload = null)
         {
             /*
             DispatchQueue.global(qos: .utility).async {
@@ -81,23 +86,24 @@ namespace TelemetryClient
             }
 
             var queuedSignals = signalCache.Pop();
-            if (!queuedSignals.isEmpty)
+            if (queuedSignals.Count > 0)
             {
                 if (configuration.showDebugLogs)
                 {
-                    Debug.Log($"Sending {queuedSignals.count} signals leaving a cache of {signalCache.Count} signals");
+                    Debug.Log($"Sending {queuedSignals.Count} signals leaving a cache of {signalCache.Count} signals");
                 }
 
-                send(queuedSignals, completion: (data, response, error) =>
+                Send(queuedSignals, completion: (data, response, error) =>
                 {
-                    if (error != null) {
+                    if (error != null)
+                    {
                         if (configuration.showDebugLogs)
                         {
                             Debug.LogError(error);
                         }
                         // The send failed, put the signal back into the queue
-                        
-                        signalCache.push(queuedSignals);
+
+                        signalCache.Push(queuedSignals);
                         return;
                     }
 
@@ -111,12 +117,12 @@ namespace TelemetryClient
                         }
                     }
                     // The send failed, put the signal back into the queue
-                    signalCache.push(queuedSignals);
+                    signalCache.Push(queuedSignals);
                     return;
-                    }
+                }
 
                     if (data != null)
-                    {
+                {
                     if (configuration.showDebugLogs)
                     {
                         Debug.Log(String(data: data, encoding: .utf8)!);
@@ -134,35 +140,39 @@ namespace TelemetryClient
                 Debug.Log("App will terminate");
             }
 
-            signalCache.backupCache();
+            signalCache.BackupCache();
         }
 
-    // MARK: - Comms
-    private void send(signalPostBodies: [SignalPostBody], completion: (Data?, URLResponse?, Error?) => ())
-    {
-            /*
-        DispatchQueue.global(qos: .utility).async {
-            [self] in
-            let path = "/api/v1/apps/\(configuration.telemetryAppID)/signals/multiple/"
-            let url = configuration.apiBaseURL.appendingPathComponent(path)
+        private void Send(SignalPostBody[] signalPostBodies, Action<string, int, string> completion)
+        {
+            var stringBuilder = new StringBuilder(capacity: 90);
+            stringBuilder.Append(configuration.ApiBaseUrl);
+            stringBuilder.Append("/api/v1/apps/");
+            stringBuilder.Append(configuration.TelemetryAppID);
+            stringBuilder.Append("/signals/multiple/");
+            string url = stringBuilder.ToString();
 
-            var urlRequest = URLRequest(url: url)
-            urlRequest.httpMethod = "POST"
-            urlRequest.addValue("application/json", forHTTPHeaderField: "Content-Type")
+            string data = JsonUtility.ToJson(signalPostBodies);
+            if (configuration.showDebugLogs)
+                Debug.Log(data);
+            var webRequest = UnityWebRequest.Post(url, data);
 
-            urlRequest.httpBody = try!JSONEncoder.telemetryEncoder.encode(signalPostBodies)
-            if configuration.showDebugLogs {
-                print(String(data: urlRequest.httpBody!, encoding: .utf8)!)
-            }
+            webRequest.SetRequestHeader("Content-Type", "application/json");
 
-            let task = URLSession.shared.dataTask(with: urlRequest, completionHandler: completionHandler)
-            task.resume()
+            UnityWebRequestAsyncOperation asyncOperation = webRequest.SendWebRequest();
+            asyncOperation.completed += (operation) =>
+            {
+                switch (webRequest.result)
+                {
+                    case UnityWebRequest.Result.ConnectionError:
+                        completion(null, -1, "Network error");
+                        break;
+                        // TODO
+                }
+            };
         }
-            */
-    }
 
-    // MARK: - Helpers
-
+        #region Helpers
         /// The default user identifier. If the platform supports it, the identifierForVendor. Otherwise, system version
         /// and build number (in which case it's strongly recommended to supply an email or UUID or similar identifier for
         /// your user yourself.
@@ -224,9 +234,9 @@ namespace TelemetryClient
             return ""
         }
     */
+        #endregion
 
-    // MARK: - Errors
-        private struct TelemetryError
+        private struct TelemetryServerError
         {
             public enum EKind
             {
