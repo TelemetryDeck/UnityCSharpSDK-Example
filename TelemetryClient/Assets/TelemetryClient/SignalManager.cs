@@ -108,26 +108,24 @@ namespace TelemetryClient
                     }
 
                     // Check for valid status code response
-                    if (response.statusCodeError != nil)
+                    if (!string.IsNullOrEmpty(error))
                     {
-                        var statusError = response.statusCodeError();
                         if (configuration.showDebugLogs)
                         {
-                            Debug.LogError(statusError);
+                            Debug.LogError(error);
+                        }
+                        // The send failed, put the signal back into the queue
+                        signalCache.Push(queuedSignals);
+                        return;
+                    }
+                    else if (data != null)
+                    {
+                        if (configuration.showDebugLogs)
+                        {
+                            Debug.Log(data);
                         }
                     }
-                    // The send failed, put the signal back into the queue
-                    signalCache.Push(queuedSignals);
-                    return;
-                }
-
-                    if (data != null)
-                {
-                    if (configuration.showDebugLogs)
-                    {
-                        Debug.Log(String(data: data, encoding: .utf8)!);
-                    }
-                }
+                });
             }
         }
 
@@ -143,7 +141,7 @@ namespace TelemetryClient
             signalCache.BackupCache();
         }
 
-        private void Send(SignalPostBody[] signalPostBodies, Action<string, int, string> completion)
+        private void Send(List<SignalPostBody> signalPostBodies, Action<string, int, string> completion)
         {
             var stringBuilder = new StringBuilder(capacity: 90);
             stringBuilder.Append(configuration.ApiBaseUrl);
