@@ -17,54 +17,67 @@ namespace TelemetryClient
     /// <typeparam name="T">A [Serializable] type.</typeparam>
     internal class SignalCache<T> where T : new()
     {
-        private const int MAX_NUMBER_OF_SIGNALS_TO_SEND_IN_BATCH = 100;
+        private const int MaxNumberOfSignalsToSendInBatch = 100;
 
         public bool showDebugLogs = false;
 
-        private List<T> cachedSignals = new List<T>();
-        //private readonly queue = DispatchQueue(label: "telemetrydeck-signal-cache", attributes: .concurrent);
+        private readonly Queue<T> cachedSignals;
 
-
+        /// <summary>
         /// How many Signals are cached
+        /// </summary>
         public int Count
         {
             get
             {
-                //queue.sync(flags: .barrier) {
-                return cachedSignals.Count;
-                //}
+                lock (this)
+                {
+                    return cachedSignals.Count;
+                }
             }
         }
 
+        /// <summary>
         /// Insert a Signal into the cache
+        /// </summary>
         public void Push(T signal)
         {
-            //queue.sync(flags: .barrier) {
-            cachedSignals.Add(signal);
-            //}
+            lock (this)
+            {
+                cachedSignals.Enqueue(signal);
+            }
         }
 
+        /// <summary>
         /// Insert a number of Signals into the cache
+        /// </summary>
         public void Push(IList<T> signals)
         {
-            //queue.sync(flags: .barrier) {
-            cachedSignals.AddRange(signals);
-            //}
+            lock (this)
+            {
+                foreach (var signal in signals)
+                    cachedSignals.Enqueue(signal);
+            }
         }
 
+        /// <summary>
         /// Remove a number of Signals from the cache and return them
         ///
         /// You should hold on to the signals returned by this function. If the action you are trying to do with them fails
         /// (e.g. sending them to a server) you should reinsert them into the cache with the `push` function.
+        /// </summary>
         public List<T> Pop()
         {
-            List<T> poppedSignals;
+            List<T> poppedSignals = new List<T>();
 
-            //queue.sync {
-            int sliceSize = Math.Min(MAX_NUMBER_OF_SIGNALS_TO_SEND_IN_BATCH, cachedSignals.Count);
-            poppedSignals = cachedSignals.GetRange(0, sliceSize);
-            cachedSignals.RemoveRange(0, sliceSize);
-            //}
+            lock (this)
+            {
+                int sliceSize = Math.Min(MaxNumberOfSignalsToSendInBatch, cachedSignals.Count);
+                for (int i = 0; i < sliceSize; i++)
+                {
+                    poppedSignals.Add(cachedSignals.Dequeue());
+                }
+            }
 
             return poppedSignals;
         }
@@ -76,40 +89,44 @@ namespace TelemetryClient
                 return $"{Application.persistentDataPath}/telemetrysignalcache";
             }
         }
+
         /// <summary>
-        /// Saves the entire signal cache to disk.
+        /// Saves the entire signal cache to disk and clears the SignalCache.
         /// </summary>
         /// <exception cref="IOException">If the cache file could not be written to.</exception>
         public void BackupCache()
         {
-            //queue.sync {
-            try
+            lock (this)
             {
-                var data = JsonUtility.ToJson(cachedSignals);
-                File.WriteAllText(FileUrl, data);
-                if (showDebugLogs)
+                try
                 {
-                    Debug.Log($"Saved Telemetry cache {data} of {cachedSignals.Count} signals");
+                    var data = JsonUtility.ToJson(cachedSignals);
+                    File.WriteAllText(FileUrl, data);
+
+                    if (showDebugLogs)
+                        Debug.Log($"Saved Telemetry cache {data} of {cachedSignals.Count} signals");
+
+                    /// After saving the cache, we need to clear our local cache otherwise
+                    /// it could get merged with the cache read back from disk later if
+                    /// it's still in memory
+                    cachedSignals.Clear();
                 }
-                /// After saving the cache, we need to clear our local cache otherwise
-                /// it could get merged with the cache read back from disk later if
-                /// it's still in memory
-                cachedSignals.Clear();
+                catch (IOException e)
+                {
+                    Debug.LogError("Error while saving Telemetry cache");
+                    throw e;
+                }
             }
-            catch (IOException e)
-            {
-                Debug.LogError("Error while saving Telemetry cache");
-                throw e;
-            }
-            //}
         }
 
+        /// <summary>
         /// Loads any previous signal cache from disk
+        /// </summary>
         public SignalCache(bool showDebugLogs)
         {
             this.showDebugLogs = showDebugLogs;
             string cacheFilePath = FileUrl;
-            //queue.sync {
+
             if (showDebugLogs)
                 Debug.Log($"Loading Telemetry cache from: {cacheFilePath}");
 
@@ -121,18 +138,16 @@ namespace TelemetryClient
 
                 /// Decode the data into a new cache
                 List<T> signals = JsonUtility.FromJson<List<T>>(data);
+                cachedSignals = new Queue<T>(signals);
+
                 if (showDebugLogs)
-                {
                     Debug.Log($"Loaded {signals.Count} signals");
-                }
-                cachedSignals = signals;
             }
             catch
             {
                 /// failed to load cache file; that's okay - maybe it has been loaded already
                 /// or it hasn't been saved yet
             }
-            //}
         }
     }
 }
