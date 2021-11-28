@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -27,7 +28,9 @@ namespace TelemetryClient
             StartTimer();
         }
 
+        /// <summary>
         /// Setup a timer to send the Signals
+        /// </summary>
         private void StartTimer()
         {
             if (sendCoroutine != null)
@@ -35,7 +38,6 @@ namespace TelemetryClient
                 StopCoroutine(sendCoroutine);
                 sendCoroutine = null;
             }
-            //Timer.scheduledTimer(timeInterval: minimumWaitTimeBetweenRequests, target: self, selector: #selector(checkForSignalsAndSend), userInfo: nil, repeats: true)
             IEnumerator SendSignals()
             {
                 while (true)
@@ -48,36 +50,42 @@ namespace TelemetryClient
             sendCoroutine = StartCoroutine(SendSignals());
         }
 
+        /// <summary>
         /// Adds a signal to the process queue
+        /// </summary>
         internal void ProcessSignal(TelemetryManagerConfiguration configuration, TelemetrySignalType signalType, string clientUser = null, Dictionary<string, string> additionalPayload = null)
         {
-            /*
-            DispatchQueue.global(qos: .utility).async {
-                [self] in
+            //DispatchQueue.global(qos: .utility).async {
+            //    [self] in
 
-            let payLoad = SignalPayload(additionalPayload: additionalPayload)
-    
+            var payLoad = new SignalPayload()
+            {
+                additionalPayload = additionalPayload
+            };
 
-            let signalPostBody = SignalPostBody(
-                receivedAt: Date(),
-                appID: UUID(uuidString: configuration.telemetryAppID)!,
-                clientUser: sha256(str: clientUser ?? defaultUserIdentifier),
-                sessionID: configuration.sessionID.uuidString,
-                type: "\(signalType)",
-                payload: payLoad.toMultiValueDimension())
-    
+            var userHash = ComputeSha256Hash(clientUser ?? DefaultUserIdentifier, Encoding.Unicode);
 
-            if configuration.showDebugLogs {
-                    print("Process signal: \(signalPostBody)")
-            }
+            var signalPostBody = new SignalPostBody()
+            {
+                receivedAt = DateTime.Now,
+                appID = new Guid(configuration.TelemetryAppID),
+                clientUser = userHash,
+                sessionID = configuration.SessionId.ToString(),
+                type = $"{signalType}",
+                payload = payLoad.ToMultiValueDimension()
+            };
 
-                signalCache.push(signalPostBody)
-            }
-            */
+            if (configuration.showDebugLogs)
+                Debug.Log($"Process signal: {signalPostBody}");
+
+            signalCache.Push(signalPostBody);
+            //}
         }
 
+        /// <summary>
         /// Send signals once we have more than the minimum.
         /// If any fail to send, we put them back into the cache to send later.
+        /// </summary>
         private void CheckForSignalsAndSend()
         {
             if (configuration.showDebugLogs)
@@ -101,21 +109,21 @@ namespace TelemetryClient
                         {
                             Debug.LogError(error);
                         }
-                        // The send failed, put the signal back into the queue
+                    // The send failed, put the signal back into the queue
 
-                        signalCache.Push(queuedSignals);
+                    signalCache.Push(queuedSignals);
                         return;
                     }
 
-                    // Check for valid status code response
-                    if (!string.IsNullOrEmpty(error))
+                // Check for valid status code response
+                if (!string.IsNullOrEmpty(error))
                     {
                         if (configuration.showDebugLogs)
                         {
                             Debug.LogError(error);
                         }
-                        // The send failed, put the signal back into the queue
-                        signalCache.Push(queuedSignals);
+                    // The send failed, put the signal back into the queue
+                    signalCache.Push(queuedSignals);
                         return;
                     }
                     else if (data != null)
@@ -129,8 +137,9 @@ namespace TelemetryClient
             }
         }
 
-
+        /// <summary>
         /// Before the app terminates, we want to save any pending signals to disk
+        /// </summary>
         private void OnDestroy()
         {
             if (configuration.showDebugLogs)
@@ -165,15 +174,17 @@ namespace TelemetryClient
                     case UnityWebRequest.Result.ConnectionError:
                         completion(null, -1, "Network error");
                         break;
-                        // TODO
+                    // TODO
                 }
             };
         }
 
         #region Helpers
+        /// <summary>
         /// The default user identifier. If the platform supports it, the identifierForVendor. Otherwise, system version
         /// and build number (in which case it's strongly recommended to supply an email or UUID or similar identifier for
         /// your user yourself.
+        /// </summary>
         public string DefaultUserIdentifier
         {
             get
@@ -198,40 +209,28 @@ namespace TelemetryClient
             }
         }
 
-        /**
-         * Example SHA 256 Hash using CommonCrypto
-         * CC_SHA256 API exposed from from CommonCrypto-60118.50.1:
-         * https://opensource.apple.com/source/CommonCrypto/CommonCrypto-60118.50.1/include/CommonDigest.h.auto.html
-         **/
-        /*
-        func sha256(str: String) -> String
+        /// <summary>
+        /// Computes SHA256 Hash using .NET Cryptography library.
+        /// </summary>
+        /// <param name="rawData">Input data to be hashed.</param>
+        /// <returns></returns>
+        static string ComputeSha256Hash(string rawData, Encoding encoding)
         {
-            if let strData = str.data(using: String.Encoding.utf8) {
-                /// #define CC_SHA256_DIGEST_LENGTH     32
-                /// Creates an array of unsigned 8 bit integers that contains 32 zeros
-                var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-    
-            /// CC_SHA256 performs digest calculation and places the result in the caller-supplied buffer for digest (md)
-            /// Takes the strData referenced value (const unsigned char *d) and hashes it into a reference to the digest parameter.
-                _ = strData.withUnsafeBytes {
-                    // CommonCrypto
-                    // extern unsigned char *CC_SHA256(const void *data, CC_LONG len, unsigned char *md)  -|
-                    // OpenSSL                                                                             |
-                    // unsigned char *SHA256(const unsigned char *d, size_t n, unsigned char *md)        <-|
-                    CC_SHA256($0.baseAddress, UInt32(strData.count), &digest)
-            }
+            // Create a SHA256   
+            using (SHA256 sha256Hash = SHA256.Create())
+            {
+                // ComputeHash - returns byte array  
+                byte[] bytes = sha256Hash.ComputeHash(encoding.GetBytes(rawData));
 
-                var sha256String = ""
-                /// Unpack each byte in the digest array and add them to the sha256String
-            for byte in digest {
-                    sha256String += String(format: "%02x", UInt8(byte))
+                // Convert byte array to a string   
+                StringBuilder builder = new StringBuilder();
+                for (int i = 0; i < bytes.Length; i++)
+                {
+                    builder.Append(bytes[i].ToString("x2"));
+                }
+                return builder.ToString();
             }
-
-                return sha256String
-            }
-            return ""
         }
-    */
         #endregion
 
         private struct TelemetryServerError

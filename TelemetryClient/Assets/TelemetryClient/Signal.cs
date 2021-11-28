@@ -1,7 +1,8 @@
 using System;
-using System.Linq;
+using Newtonsoft.Json;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 namespace TelemetryClient
 {
@@ -49,38 +50,42 @@ namespace TelemetryClient
                 additionalPayload = additionalPayload
             };
         }
-    }
 
-    /*
-    /// Converts the `additionalPayload` to a `[String: String]` dictionary
-    Dictionary<string, string> ToDictionary()
+        /// Converts the object and `additionalPayload` to a `[String: String]` dictionary
+        internal Dictionary<string, string> ToDictionary()
         {
-        /// We need to convert the additionalPayload into new key/value pairs
+            /// We need to convert the additionalPayload into new key/value pairs
 
-        // encoder.dateEncodingStrategy = .iso8601;
-        try
-        {
-            /// Create a Dictionary
-            var jsonData = JsonUtility.ToJson(this);
-            var dict = try JSONSerialization.jsonObject(with: jsonData, options: []) as?[String: Any]
-        /// Remove the additionalPayload sub dictionary
-        dict?.removeValue(forKey: "additionalPayload")
-        /// Add the additionalPayload as new key/value pairs
-        return dict?.merging(additionalPayload, uniquingKeysWith: { _, last in last }) as?[String: String] ?? [:]
-    }
+            // encoder.dateEncodingStrategy = .iso8601;
+            try
+            {
+                /// Create a Dictionary
+                var jsonData = JsonConvert.SerializeObject(this);
+                var dict = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonData);
+                /// Remove the additionalPayload sub dictionary
+
+                dict.Remove("additionalPayload");
+                /// Add the additionalPayload as new key/value pairs
+                var merged = dict.Concat(additionalPayload)
+                       .GroupBy(kv => kv.Key)
+                       .ToDictionary(g => g.Key, g => g.First().Value);
+                return merged;
+        }
             catch
             {
-                return [:]
+                return new Dictionary<string, string>();
             }
-            }
-
-string[] ToMultiValueDimension()
-            {
-                return ToDictionary().map { key, value in key.replacingOccurrences(of: ":", with: "_") + ":" + value }
-            }
-
         }
-    */
+
+        internal string[] ToMultiValueDimension()
+        {
+            return ToDictionary().Select(pair =>
+            {
+                return pair.Key.Replace(":", "_") + (":" + pair.Value);
+            }).ToArray();
+        }
+
+    }
 
     static class CommonValues
     {
