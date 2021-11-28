@@ -55,8 +55,6 @@ namespace TelemetryClient
         internal Dictionary<string, string> ToDictionary()
         {
             /// We need to convert the additionalPayload into new key/value pairs
-
-            // encoder.dateEncodingStrategy = .iso8601;
             try
             {
                 /// Create a Dictionary
@@ -70,7 +68,7 @@ namespace TelemetryClient
                        .GroupBy(kv => kv.Key)
                        .ToDictionary(g => g.Key, g => g.First().Value);
                 return merged;
-        }
+            }
             catch
             {
                 return new Dictionary<string, string>();

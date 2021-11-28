@@ -1,8 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Security.Cryptography;
 using System.Text;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -55,31 +56,36 @@ namespace TelemetryClient
         /// </summary>
         internal void ProcessSignal(TelemetryManagerConfiguration configuration, TelemetrySignalType signalType, string clientUser = null, Dictionary<string, string> additionalPayload = null)
         {
-            //DispatchQueue.global(qos: .utility).async {
-            //    [self] in
-
-            var payLoad = new SignalPayload()
+            var payload = new SignalPayload()
             {
                 additionalPayload = additionalPayload
             };
+            string userIdentifier = clientUser ?? DefaultUserIdentifier;
 
-            var userHash = ComputeSha256Hash(clientUser ?? DefaultUserIdentifier, Encoding.Unicode);
-
-            var signalPostBody = new SignalPostBody()
+            var job = new CreateSignalPostBodyJob()
             {
-                receivedAt = DateTime.Now,
-                appID = new Guid(configuration.TelemetryAppID),
-                clientUser = userHash,
-                sessionID = configuration.SessionId.ToString(),
-                type = $"{signalType}",
-                payload = payLoad.ToMultiValueDimension()
+                userIdentifier = userIdentifier,
+                signalPayload = payload,
+                result = new NativeArray<SignalPostBody>(0, Allocator.TempJob)
             };
+            JobHandle handle = job.Schedule();
+            IEnumerator WaitForJob()
+            {
+                while (true)
+                {
+                    if (handle.IsCompleted)
+                        break;
+                    yield return new WaitForEndOfFrame();
+                }
+                handle.Complete();
+                var signalPostBody = job.result[0];
 
-            if (configuration.showDebugLogs)
-                Debug.Log($"Process signal: {signalPostBody}");
+                if (configuration.showDebugLogs)
+                    Debug.Log($"Process signal: {signalPostBody}");
 
-            signalCache.Push(signalPostBody);
-            //}
+                signalCache.Push(signalPostBody);
+            }
+            StartCoroutine(WaitForJob());
         }
 
         /// <summary>
@@ -206,29 +212,6 @@ namespace TelemetryClient
             return "unknown user \(SignalPayload.platform) \(SignalPayload.systemVersion) \(SignalPayload.buildNumber)"
             #endif
                 */
-            }
-        }
-
-        /// <summary>
-        /// Computes SHA256 Hash using .NET Cryptography library.
-        /// </summary>
-        /// <param name="rawData">Input data to be hashed.</param>
-        /// <returns></returns>
-        static string ComputeSha256Hash(string rawData, Encoding encoding)
-        {
-            // Create a SHA256   
-            using (SHA256 sha256Hash = SHA256.Create())
-            {
-                // ComputeHash - returns byte array  
-                byte[] bytes = sha256Hash.ComputeHash(encoding.GetBytes(rawData));
-
-                // Convert byte array to a string   
-                StringBuilder builder = new StringBuilder();
-                for (int i = 0; i < bytes.Length; i++)
-                {
-                    builder.Append(bytes[i].ToString("x2"));
-                }
-                return builder.ToString();
             }
         }
         #endregion
