@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fcf7219bab7fe46a1ad266029b2fee19, type: 3}
+  m_Name: Readme
+  m_EditorClassIdentifier: 
+  icon: {fileID: 2800000, guid: 99eb093a21ca6de4cabad03221bb4921, type: 3}
+  iconMaxWidth: 192
+  title: TelemetryDeck for Unity (C#)
+  sections:
+  - heading: Lightweight Analytics That's Not Evil
+    text: "Please visit our website to learn more."
+    linkText: TelemetryDeck.com
+    url: https://telemetrydeck.com/
+  - heading: About this Project
+    text: "This project contains the TelemetryDeck Unity C# Client and an example
+      usage of the API (see TestApp folder).\n
+	  To use TelemetryDeck in your own project, please get the
+      latest release package from GitHub."
+    linkText: Get the latest TelemetryClient from GitHub
+    url: https://github.com/conath/TelemetryDeck-Unity/releases
+  - heading: License
+    text: "TelemetryClient is licensed unter a variation of The MIT License, which does not require attribution.\n
+	This means you can use the TelemetryClient Unity Package or source code in your projects without including the license text (linked below).\n
+	Of course, attribution is very much appreciated. <3"
+    linkText: View the TelemetryClient license 
+    url: https://github.com/conath/TelemetryDeck-Unity/blob/6f7ffe12b7aa673358a3f464071e60407c66b599/LICENSE
+  - heading: 3rd Party Licenses
+    text: "TelemetryClient for Unity uses the Newtonsoft.Json for Unity package (aka Json.Net), which is licensed unter The MIT License."
+    linkText: View the Newtonsoft.Json license
+    url: https://github.com/jilleJr/Newtonsoft.Json-for-Unity/blob/c5ef609b69a37270306f944f597a28e81775ffa5/LICENSE.md
+  loadedLayout: 1
