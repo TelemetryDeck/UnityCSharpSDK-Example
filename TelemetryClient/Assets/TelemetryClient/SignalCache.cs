@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
+using Newtonsoft.Json;
 
 namespace TelemetryClient
 {
@@ -100,7 +101,7 @@ namespace TelemetryClient
             {
                 try
                 {
-                    var data = JsonUtility.ToJson(cachedSignals);
+                    var data = JsonConvert.SerializeObject(cachedSignals);
                     File.WriteAllText(FileUrl, data);
 
                     if (showDebugLogs)
@@ -137,7 +138,7 @@ namespace TelemetryClient
                 File.Delete(cacheFilePath);
 
                 /// Decode the data into a new cache
-                List<T> signals = JsonUtility.FromJson<List<T>>(data);
+                List<T> signals = JsonConvert.DeserializeObject<List<T>>(data);
                 cachedSignals = new Queue<T>(signals);
 
                 if (showDebugLogs)
@@ -147,6 +148,7 @@ namespace TelemetryClient
             {
                 /// failed to load cache file; that's okay - maybe it has been loaded already
                 /// or it hasn't been saved yet
+                cachedSignals = new Queue<T>();
             }
         }
     }

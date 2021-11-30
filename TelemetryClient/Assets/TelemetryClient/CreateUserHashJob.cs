@@ -1,4 +1,3 @@
-using System;
 using System.Security.Cryptography;
 using System.Text;
 using Unity.Collections;
@@ -6,28 +5,19 @@ using Unity.Jobs;
 
 namespace TelemetryClient
 {
-    internal struct CreateSignalPostBodyJob : IJob
+    internal struct CreateUserHashJob : IJob
     {
-        public string userIdentifier;
-        public string appID;
-        public string sessionID;
-        public string signalType;
-        public SignalPayload signalPayload;
-        public NativeArray<SignalPostBody> result;
+        public const int UserHashStringLength = 64;
+
+        [ReadOnly]
+        public NativeArray<char> userIdentifier;
+
+        public NativeArray<char> userHash;
 
         public void Execute()
         {
-            var userHash = ComputeSha256Hash(userIdentifier, Encoding.Unicode);
-
-            result[0] = new SignalPostBody()
-            {
-                receivedAt = DateTime.Now,
-                appID = new Guid(appID),
-                clientUser = userHash,
-                sessionID = sessionID,
-                type = signalType,
-                payload = signalPayload.ToMultiValueDimension()
-            };
+            var array = ComputeSha256Hash(userIdentifier.ToArray(), Encoding.Unicode).ToCharArray();
+            userHash.CopyFrom(array);
         }
 
         /// <summary>
@@ -35,7 +25,7 @@ namespace TelemetryClient
         /// </summary>
         /// <param name="rawData">Input data to be hashed.</param>
         /// <returns></returns>
-        static string ComputeSha256Hash(string rawData, Encoding encoding)
+        static string ComputeSha256Hash(char[] rawData, Encoding encoding)
         {
             // Create a SHA256   
             using (SHA256 sha256Hash = SHA256.Create())

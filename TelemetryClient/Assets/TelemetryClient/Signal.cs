@@ -64,10 +64,17 @@ namespace TelemetryClient
 
                 dict.Remove("additionalPayload");
                 /// Add the additionalPayload as new key/value pairs
-                var merged = dict.Concat(additionalPayload)
-                       .GroupBy(kv => kv.Key)
-                       .ToDictionary(g => g.Key, g => g.First().Value);
-                return merged;
+                if (additionalPayload != null)
+                {
+                    var merged = dict.Concat(additionalPayload)
+                           .GroupBy(kv => kv.Key)
+                           .ToDictionary(g => g.Key, g => g.First().Value);
+                    return merged;
+                }
+                else
+                {
+                    return dict;
+                }
             }
             catch
             {

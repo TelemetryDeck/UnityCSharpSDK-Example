@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,17 +17,21 @@ namespace TelemetryClient
         private const float MINIMUM_WAIT_TIME_BETWEEN_REQUESTS = 10; // seconds
 
         private SignalCache<SignalPostBody> signalCache;
-        private readonly TelemetryManagerConfiguration configuration;
+        private TelemetryManagerConfiguration configuration;
         private Coroutine sendCoroutine = null;
 
-        public SignalManager(TelemetryManagerConfiguration configuration)
+        public static SignalManager CreateSignalManager(TelemetryManagerConfiguration configuration)
         {
-            this.configuration = configuration;
+            var gameObject = new GameObject("TelemetrySignalManager");
+            DontDestroyOnLoad(gameObject);
+            var @this = gameObject.AddComponent<SignalManager>();
+            @this.configuration = configuration;
 
             // We automatically load any old signals from disk on initialisation
-            signalCache = new SignalCache<SignalPostBody>(showDebugLogs: configuration.showDebugLogs);
+            @this.signalCache = new SignalCache<SignalPostBody>(showDebugLogs: configuration.showDebugLogs);
 
-            StartTimer();
+            @this.StartTimer();
+            return @this;
         }
 
         /// <summary>
@@ -56,34 +61,50 @@ namespace TelemetryClient
         /// </summary>
         internal void ProcessSignal(TelemetryManagerConfiguration configuration, TelemetrySignalType signalType, string clientUser = null, Dictionary<string, string> additionalPayload = null)
         {
-            var payload = new SignalPayload()
-            {
-                additionalPayload = additionalPayload
-            };
-            string userIdentifier = clientUser ?? DefaultUserIdentifier;
+            var payload = SignalPayload.GetCommonPayload();
+            payload.additionalPayload = additionalPayload;
 
-            var job = new CreateSignalPostBodyJob()
+            string userIdentifier = clientUser ?? DefaultUserIdentifier;
+            // calculate SHA256 hash async
+            var job = new CreateUserHashJob()
             {
-                userIdentifier = userIdentifier,
-                signalPayload = payload,
-                result = new NativeArray<SignalPostBody>(0, Allocator.TempJob)
+                userIdentifier = new NativeArray<char>(userIdentifier.ToCharArray(), Allocator.Persistent),
+                userHash = new NativeArray<char>(CreateUserHashJob.UserHashStringLength, Allocator.Persistent)
             };
-            JobHandle handle = job.Schedule();
             IEnumerator WaitForJob()
             {
-                while (true)
+                try
                 {
-                    if (handle.IsCompleted)
-                        break;
-                    yield return new WaitForEndOfFrame();
+                    JobHandle handle = job.Schedule();
+
+                    while (true)
+                    {
+                        if (handle.IsCompleted)
+                            break;
+                        yield return new WaitForEndOfFrame();
+                    }
+                    handle.Complete();
+
+                    var signalPostBody = new SignalPostBody()
+                    {
+                        type = signalType,
+                        appID = new Guid(configuration.TelemetryAppID),
+                        clientUser = new string(job.userHash.ToArray()),
+                        payload = payload.ToMultiValueDimension(),
+                        receivedAt = DateTime.Now,
+                        sessionID = configuration.SessionId.ToString()
+                    };
+
+                    if (configuration.showDebugLogs)
+                        Debug.Log($"Adding signal to cache: {signalPostBody.type}");
+
+                    signalCache.Push(signalPostBody);
                 }
-                handle.Complete();
-                var signalPostBody = job.result[0];
-
-                if (configuration.showDebugLogs)
-                    Debug.Log($"Process signal: {signalPostBody}");
-
-                signalCache.Push(signalPostBody);
+                finally
+                {
+                    job.userIdentifier.Dispose();
+                    job.userHash.Dispose();
+                }
             }
             StartCoroutine(WaitForJob());
         }
@@ -113,23 +134,23 @@ namespace TelemetryClient
                     {
                         if (configuration.showDebugLogs)
                         {
+                            Debug.LogError($"Failed to send signal data:\n{data}");
                             Debug.LogError(error);
                         }
-                    // The send failed, put the signal back into the queue
-
-                    signalCache.Push(queuedSignals);
+                        // The send failed, put the signal back into the queue
+                        signalCache.Push(queuedSignals);
                         return;
                     }
 
-                // Check for valid status code response
-                if (!string.IsNullOrEmpty(error))
+                    // Check for valid status code response
+                    if (!string.IsNullOrEmpty(error))
                     {
                         if (configuration.showDebugLogs)
                         {
                             Debug.LogError(error);
                         }
-                    // The send failed, put the signal back into the queue
-                    signalCache.Push(queuedSignals);
+                        // The send failed, put the signal back into the queue
+                        signalCache.Push(queuedSignals);
                         return;
                     }
                     else if (data != null)
@@ -158,17 +179,21 @@ namespace TelemetryClient
 
         private void Send(List<SignalPostBody> signalPostBodies, Action<string, int, string> completion)
         {
-            var stringBuilder = new StringBuilder(capacity: 90);
+            var stringBuilder = new StringBuilder(capacity: 96, maxCapacity: 100);
             stringBuilder.Append(configuration.ApiBaseUrl);
             stringBuilder.Append("/api/v1/apps/");
             stringBuilder.Append(configuration.TelemetryAppID);
             stringBuilder.Append("/signals/multiple/");
             string url = stringBuilder.ToString();
 
-            string data = JsonUtility.ToJson(signalPostBodies);
+            string data = JsonConvert.SerializeObject(signalPostBodies);
+            byte[] bytes = Encoding.UTF8.GetBytes(data);
             if (configuration.showDebugLogs)
                 Debug.Log(data);
-            var webRequest = UnityWebRequest.Post(url, data);
+            var webRequest = new UnityWebRequest();
+            webRequest.url = url;
+            webRequest.method = UnityWebRequest.kHttpVerbPOST;
+            webRequest.uploadHandler = new UploadHandlerRaw(bytes);
 
             webRequest.SetRequestHeader("Content-Type", "application/json");
 
@@ -178,9 +203,13 @@ namespace TelemetryClient
                 switch (webRequest.result)
                 {
                     case UnityWebRequest.Result.ConnectionError:
-                        completion(null, -1, "Network error");
+                    case UnityWebRequest.Result.DataProcessingError:
+                    case UnityWebRequest.Result.ProtocolError:
+                        completion(data, -1, webRequest.error);
                         break;
-                    // TODO
+                    case UnityWebRequest.Result.Success:
+                        completion(data, 0, null);
+                        break;
                 }
             };
         }

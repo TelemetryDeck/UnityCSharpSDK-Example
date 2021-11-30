@@ -32,7 +32,7 @@ namespace TelemetryClient
         private TelemetryManager(TelemetryManagerConfiguration configuration)
         {
             this.configuration = configuration;
-            signalManager = new SignalManager(configuration: configuration);
+            signalManager = SignalManager.CreateSignalManager(configuration: configuration);
         }
 
         #region API
@@ -80,9 +80,9 @@ namespace TelemetryClient
 
         public void Send(TelemetrySignalType signalType, string clientUser = null, AdditionalPayload additionalPayload = null)
         {
-#if DEBUG
+#if UNITY_EDITOR || DEBUG
             /// To send, or not to send telemetry in DEBUG mode, that is the question. (William Shakespeare, probably)
-            if (configuration.sendSignalsInDebugConfiguration == false)
+            if (configuration.sendSignalsInEditorAndDebug == false)
             {
                 Debug.Log($"[Telemetry] Debug is enabled, signal with type {signalType} will not be sent to server.");
                 return;

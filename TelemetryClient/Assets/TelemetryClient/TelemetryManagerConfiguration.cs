@@ -54,8 +54,9 @@ namespace TelemetryClient
 
         /// If `true`, sends signals even if your scheme's build configuration is set to Debug.
         ///
-        /// Defaults to false, which only sends signals if your scheme's build configuration is set to Release.
-        public bool sendSignalsInDebugConfiguration = false;
+        /// Defaults to false, which only sends signals if not running in Unity Editor, 
+        /// and if your build configuration is not set to Debug build.
+        public bool sendSignalsInEditorAndDebug = false;
 
         /// Log the current status to the signal cache to the console.
         public bool showDebugLogs = false;
@@ -78,7 +79,7 @@ namespace TelemetryClient
                 ApiBaseUrl = TELEMETRY_API_BASE_URL;
             }
 
-            SessionId = Guid.NewGuid();
+            _sessionId = Guid.NewGuid();
         }
     }
 }
