@@ -1,0 +1,3 @@
+[submodule "TelemetryClient/Assets/TelemetryClient"]
+	path = TelemetryClient/Assets/TelemetryClient
+	url = https://github.com/conath/TelemetryClient-for-UnityCSharp.git
