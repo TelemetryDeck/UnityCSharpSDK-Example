@@ -1,6 +1,4 @@
-This project is work-in-progress. Please watch the Releases to be notified when it is ready to use.
-
-# TelemetryClient
+# TelemetryClient for Unity
 
 ## Lightweight Analytics That's Not Evil
 
@@ -12,9 +10,9 @@ This repository contains the TelemetryDeck Unity C# Client, as well as an exampl
 
 ## Usage
 
-To use TelemetryDeck in your own project, please download the latest release package and import it into your project.
+To use TelemetryDeck in your own project, please download the latest [release](/releases) package and import it into your project.
 
-**TODO: Unity Package Manager.**
+TelemetryClient for Unity is not yet available with Unity Package Manager.
 
 ## License
 
