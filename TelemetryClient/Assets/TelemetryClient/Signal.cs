@@ -57,12 +57,15 @@ namespace TelemetryClient
             /// We need to convert the additionalPayload into new key/value pairs
             try
             {
-                /// Create a Dictionary
+                /// remove additional payload temporarily for serialization
+                var _addPayload = additionalPayload;
+                this.additionalPayload = null;
+                /// Create a string-to-string Dictionary for the TelemetryDeck backend
                 var jsonData = JsonConvert.SerializeObject(this);
                 var dict = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonData);
-                /// Remove the additionalPayload sub dictionary
-
+                /// Remove the empty additionalPayload sub dictionary
                 dict.Remove("additionalPayload");
+                this.additionalPayload = _addPayload;
                 /// Add the additionalPayload as new key/value pairs
                 if (additionalPayload != null)
                 {
@@ -76,8 +79,9 @@ namespace TelemetryClient
                     return dict;
                 }
             }
-            catch
+            catch (JsonSerializationException e)
             {
+                Debug.LogError($"Failed to serialize Signal to string-Dictionary. {e}");
                 return new Dictionary<string, string>();
             }
         }
