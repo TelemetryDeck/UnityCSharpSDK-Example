@@ -22,9 +22,11 @@ namespace TelemetryClient.TestApp.Scripts
         private Button sendAdvancedButton;
         [SerializeField]
         private Button startNewSessionButton;
+        [SerializeField]
+        private Button stopTelemetryButton;
 
         private int numberOfSignalsSentThisSession = 0;
-        private bool telemetryInitialized = false;
+        private bool TelemetryInitialized => TelemetryManager.IsInitialized;
 
         private void Awake()
         {
@@ -43,20 +45,19 @@ namespace TelemetryClient.TestApp.Scripts
         /// </summary>
         public void InitializeTelemetryIfNeeded()
         {
-            if (telemetryInitialized)
+            if (TelemetryInitialized)
                 return;
 
             var configuration = new TelemetryManagerConfiguration(TelemetryAppId);
             // anonymize the telemetry sent entirely by setting a generic user ID
             configuration.defaultUser = GenericUserId;
-            // enable sending signals when running in Unity Editor
-            configuration.sendSignalsInEditorAndDebug = true;
+            // mark all signals as testing signals
+            configuration.IsTestMode = true;
             configuration.showDebugLogs = true;
             // initialize the TelemetryClient (otherwise we can't send any Signals)
             // you can delay this call to whenever you choose to start sending Signals
             // TelemetryClient will automatically attempt to send a "new session" signal.
             TelemetryManager.Initialize(configuration);
-            telemetryInitialized = true;
             UpdateUI();
         }
 
@@ -65,7 +66,7 @@ namespace TelemetryClient.TestApp.Scripts
         /// </summary>
         private void UpdateUI()
         {
-            if (telemetryInitialized)
+            if (TelemetryInitialized)
             {
                 string newText = "Telemetry initialized\n";
                 newText += string.Format("Sent {0:d} signals this session.", numberOfSignalsSentThisSession);
@@ -76,10 +77,11 @@ namespace TelemetryClient.TestApp.Scripts
                 uiText.text = "Telemetry unavailable";
             }
 
-            initTelemetryButton.interactable = !telemetryInitialized;
-            sendSimpleButton.interactable = telemetryInitialized;
-            sendAdvancedButton.interactable = telemetryInitialized;
-            startNewSessionButton.interactable = telemetryInitialized;
+            initTelemetryButton.interactable = !TelemetryInitialized;
+            sendSimpleButton.interactable = TelemetryInitialized;
+            sendAdvancedButton.interactable = TelemetryInitialized;
+            startNewSessionButton.interactable = TelemetryInitialized;
+            stopTelemetryButton.interactable = TelemetryInitialized;
         }
 
         /// <summary>
@@ -88,7 +90,7 @@ namespace TelemetryClient.TestApp.Scripts
         /// </summary>
         public void SendSimpleSignal()
         {
-            if (!telemetryInitialized)
+            if (!TelemetryInitialized)
                 return;
 
             TelemetryManager.SendSignal(SimpleSignalName, clientUser: GenericUserId);
@@ -102,7 +104,7 @@ namespace TelemetryClient.TestApp.Scripts
         /// </summary>
         public void SendAdvancedSignal()
         {
-            if (!telemetryInitialized)
+            if (!TelemetryInitialized)
                 return;
 
             var numberString = string.Format("{0:d}", numberOfSignalsSentThisSession);
@@ -115,11 +117,20 @@ namespace TelemetryClient.TestApp.Scripts
 
         public void StartNewSession()
         {
-            if (!telemetryInitialized)
+            if (!TelemetryInitialized)
                 return;
 
             TelemetryManager.Instance.GenerateNewSession();
             numberOfSignalsSentThisSession = 0;
+            UpdateUI();
+        }
+
+        public void StopTelemetry()
+        {
+            if (!TelemetryInitialized)
+                return;
+
+            TelemetryManager.Terminate();
             UpdateUI();
         }
     }
