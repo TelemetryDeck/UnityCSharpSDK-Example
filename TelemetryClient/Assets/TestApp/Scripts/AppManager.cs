@@ -8,6 +8,8 @@ namespace TelemetryClient.TestApp.Scripts
 
     public class AppManager : MonoBehaviour
     {
+        private const string githubRepoURL = "https://github.com/TelemetryDeck/UnityCSharpSDK-Example/";
+
         [Header("Preferences")]
         private bool initializeTelemetryOnAwake = false;
 
@@ -132,6 +134,21 @@ namespace TelemetryClient.TestApp.Scripts
 
             TelemetryManager.Terminate();
             UpdateUI();
+        }
+
+        public void AboutApp()
+        {
+            Application.OpenURL(githubRepoURL);
+        }
+
+        public void QuitApp()
+        {
+#if UNITY_EDITOR
+            if (UnityEditor.EditorApplication.isPlaying)
+                UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
     }
 }
